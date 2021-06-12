@@ -1,6 +1,5 @@
-from os import write
-import requests as req
 from bs4 import BeautifulSoup
+import requests
 import json
 
 def get_feature(dom_tree, selector, attribute=None):
@@ -13,59 +12,42 @@ def get_feature(dom_tree, selector, attribute=None):
     except (AttributeError, TypeError):
         return None
 
-next_page = "https://www.ceneo.pl/55892514"
+features = {
+    "author": ["span.user-post__author-name"],
+    "recomm": ["span.user-post__author-recomendation"],
+    "stars": ["span.user-post__score-count"],
+    "content": ["div.user-post__text"],
+    "pros": ["div.review-feature__title--positives ~ .review-feature__item", []],
+    "cons": ["div.review-feature__title--negatives ~ .review-feature__item", []],
+    "useful": ["button.vote-yes > span"],
+    "useless": ["button.vote-no > span"],
+    "purchased": ["div.review-pz"],
+    "publish_date": ["span.user-post__published > time:nth-child(1)", "datetime"],
+    "purchase_date": ["span.user-post__published > time:nth-child(2)", "datetime"]
+}
+
+product_id = input("Podaj kod produktu: ")
+next_page = "https://www.ceneo.pl/{}#tab=reviews".format(product_id)
 all_opinions = []
 
 while next_page:
-    respons = req.get("next_page")
-
-    # print(respons.text) #.encode('cp1252', errors='ignore')
-
+    respons = requests.get(next_page)
     page_dom = BeautifulSoup(respons.text, "html.parser")
-
     opinions = page_dom.select("div.js_product-review")
-    # print(type(opinions))
-    opinion = opinions.pop(0)
-    # print(type(opinion))
-
-    all_opinions = []
 
     for opinion in opinions:
-        single_opinion = {
-            'opinion_id': opinion["data-entry-id"],
-                'author': get_feature(opinion, "span.user-post__author-name"),
-                'recomm': get_feature(opinion,"span.user-post__author-recomendation"),
-                'stars': get_feature(opinion,"span.user-post__score-count"),
-                'content': get_feature(opinion,"div.user-post__text"),
-                'pros': get_feature(opinion, "div.review-feature__title--positives ~ .review-feature__item", []),
-                'cons': get_feature(opinion, "div.review-feature__title--negatives ~ .review-feature__item", []),
-                'useful': get_feature(opinion, "button.vote-yes > span"),
-                'useless': get_feature(opinion, "button.vote-no > span"),
-                'purchased': get_feature(opinion, "div.review-pz"),
-                'publish_date': get_feature(opinion, "span.user-post__published > time:nth-child(1)", "datetime"),
-                'purchase_date': get_feature(opinion,"span.user-post__published > time:nth-child(2)", "datetime")
-        }
+        single_opinion = {key:get_feature(opinion,*value) for key, value in features.items()}
+        single_opinion["opinion_id"] = opinion["data-entry-id"],
         all_opinions.append(single_opinion)
 
-try:
-    next_page = "https://www.ceneo.pl/" + get_feature(page_dom, "pagination__item pagination__next", "href")
-except TypeError:
-    next_page = None
+    try:
+        next_page = 'https://www.ceneo.pl' + \
+            get_feature(page_dom, "a.pagination__next", "href")
+    except TypeError:
+        next_page = None 
+    print(next_page)
 
-with open("opinions/55892514.json", "w" ,encoding="UTF-8") as jf:
+with open("opinions/{}.json".format(product_id), "w", encoding="UTF-8") as jf:
     json.dump(all_opinions, jf, indent=4, ensure_ascii=False)
 
-
-# json.dumps(all_opinions, indent=4, ensure_ascii=False)
-
-
-
-# print(opinion_id, author, recomm, stars, content, pros, cons, useful, useless, purchased, publish_date, purchase_date)
-
-## pip freeze > requirements.txt
-#git add .
-# git commit -m "2021-05-08 BS"
-
-
-# print(page_dom.prettify())
-
+# print(json.dumps(all_opinions, indent=4, ensure_ascii=False))
